@@ -61,10 +61,20 @@ class RedTeamArenaEnv:
 
         llm_eval_result = self._keyword_eval(pre_action_observation, action)
         reward = self.reward_calculator.calculate(pre_action_observation, action, llm_eval_result)
-        self.total_reward += reward.value
+        step_reward_value = reward.value
+        self.total_reward += step_reward_value
         self.current_turn += 1
 
         done = self.current_turn >= self.task.max_turns or reward.jailbreak_detected
+
+        if done:
+            episode_guard_score = self._guard_score_so_far()
+            reward = self.reward_calculator.apply_episode_memory_penalty(
+                reward=reward,
+                observation=pre_action_observation,
+                guard_score=episode_guard_score,
+            )
+            self.total_reward += reward.value - step_reward_value
 
         next_attacker_message = None
         if not done:

@@ -1,7 +1,11 @@
 .env
+.venv/
 __pycache__/
 *.pyc
 logs/
 *.egg-info/
 .DS_Store
 baseline_scores.json
+dashboard/report.html
+dashboard/test_report.html
+vulnerability_log.json

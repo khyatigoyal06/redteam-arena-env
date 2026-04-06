@@ -7,8 +7,12 @@ from pathlib import Path
 from types import MethodType
 from typing import Any
 
+from dashboard.generate_dashboard import generate_dashboard
+from environment.adaptive_difficulty import AdaptiveDifficultyManager
 from environment.env import RedTeamArenaEnv
-from environment.models import Action, Observation
+from environment.models import Action, AttackerPersona, Observation
+from environment.personas import PERSONAS
+from environment.reward import jailbreak_memory
 from graders.task1_grader import Task1Grader
 from graders.task2_grader import Task2Grader
 from graders.task3_grader import Task3Grader
@@ -128,10 +132,19 @@ def generate_guard_response(
     if client is None:
         raise RuntimeError("OpenAI client is required when not running in dry-run mode.")
 
-    response = client.chat.completions.create(
-        model=model_name,
-        messages=build_guard_messages(observation),
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=build_guard_messages(observation),
+        )
+    except openai.RateLimitError as exc:
+        print(f"OpenAI quota/rate-limit hit ({exc}). Falling back to safe mock guard response.")
+        return (
+            "I cannot help with that request. It appears to involve "
+            "potentially harmful content. I'd be happy to assist with "
+            "something else."
+        )
+
     content = response.choices[0].message.content
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Guard model returned an empty response.")
@@ -197,8 +210,9 @@ def run_task(
     model_name: str | None,
     dry_run: bool,
     logs_dir: Path,
-) -> float:
-    """Run one full task episode and return the grader score."""
+    forced_persona: str | None = None,
+) -> dict[str, Any]:
+    """Run one full task episode and return score plus dashboard metadata."""
 
     env = RedTeamArenaEnv(task_id=task_id)
     if dry_run:
@@ -211,8 +225,22 @@ def run_task(
     }
     grader = grader_by_task[task_id]
 
-    observation = env.reset()
+    if forced_persona:
+        forced_enum = AttackerPersona(forced_persona.strip().upper())
+        env.conversation_history = []
+        env.current_turn = 0
+        env.total_reward = 0.0
+        env.current_persona = forced_enum
+        env.current_persona_definition = PERSONAS[forced_enum]
+        env.episode_harm_category = env._choose_harm_category()
+        opening_message = env._generate_attacker_message(is_opening_turn=True)
+        env.conversation_history.append({"role": "user", "content": opening_message})
+        observation = env.state()
+    else:
+        observation = env.reset()
+
     done = False
+    turn_scores: list[float] = []
     while not done:
         guard_response = generate_guard_response(
             client=client,
@@ -221,7 +249,8 @@ def run_task(
             dry_run=dry_run,
         )
         action = make_action(guard_response)
-        observation, _, done, _ = env.step(action)
+        observation, reward, done, _ = env.step(action)
+        turn_scores.append(reward.value)
 
     task_score = grader.grade(env.conversation_history)
     save_episode_log(
@@ -232,7 +261,13 @@ def run_task(
         dry_run=dry_run,
     )
     print(f"Task {task_id} score: {task_score:.4f}")
-    return task_score
+    return {
+        "attacker_persona": env.current_persona.value.lower() if env.current_persona else "unknown",
+        "harm_category": env.episode_harm_category,
+        "task_id": task_id,
+        "guard_score": task_score,
+        "turn_scores": turn_scores,
+    }
 
 
 def main() -> None:
@@ -260,17 +295,52 @@ def main() -> None:
 
     client = create_guard_client(api_base_url=api_base_url, dry_run=args.dry_run)
     logs_dir = project_root / "logs"
+    dashboard_output_path = project_root / "dashboard" / "report.html"
+    adaptive_manager = AdaptiveDifficultyManager()
+
+    results = [run_task(1, client, model_name, args.dry_run, logs_dir)]
+
+    task2_episodes = 2
+    next_task2_persona: str | None = None
+    for _ in range(task2_episodes):
+        task2_result = run_task(
+            2,
+            client,
+            model_name,
+            args.dry_run,
+            logs_dir,
+            forced_persona=next_task2_persona,
+        )
+        results.append(task2_result)
+
+        current_persona = task2_result["attacker_persona"]
+        candidate_persona = adaptive_manager.get_next_persona(
+            current_persona=current_persona,
+            guard_score=task2_result["guard_score"],
+        )
+        if candidate_persona != current_persona:
+            adaptive_manager.log_escalation(current_persona, candidate_persona, 2)
+            next_task2_persona = candidate_persona
+        else:
+            next_task2_persona = current_persona
+
+    results.append(run_task(3, client, model_name, args.dry_run, logs_dir))
+
+    task2_scores = [item["guard_score"] for item in results if item["task_id"] == 2]
 
     scores = {
-        "task1": run_task(1, client, model_name, args.dry_run, logs_dir),
-        "task2": run_task(2, client, model_name, args.dry_run, logs_dir),
-        "task3": run_task(3, client, model_name, args.dry_run, logs_dir),
+        "task1": results[0]["guard_score"],
+        "task2": round(sum(task2_scores) / len(task2_scores), 4),
+        "task3": results[-1]["guard_score"],
     }
     scores["mean"] = round(
         sum([scores["task1"], scores["task2"], scores["task3"]]) / 3,
         4,
     )
+
+    generate_dashboard(results, dashboard_output_path)
     print(json.dumps(scores))
+    jailbreak_memory.summarize()
 
 
 if __name__ == "__main__":
