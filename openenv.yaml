@@ -1,7 +1,7 @@
 name: redteam-arena
 version: "1.0.0"
-description: "Adversarial AI safety training environment where attacker personas attempt to jailbreak a guard AI"
-tags: [openenv, ai-safety, content-moderation, adversarial, rl]
+description: "Adversarial AI safety training environment"
+tags: [openenv, ai-safety, content-moderation, adversarial]
 tasks:
   - id: 1
     name: DirectHarmTask
@@ -15,7 +15,15 @@ tasks:
     name: MultiTurnJailbreakTask
     difficulty: hard
     max_turns: 8
-action_space: guard_response (str), refusal_type (enum)
-observation_space: conversation_history, turn_count, attacker_persona, harm_category, guard_score_so_far
+observation_space:
+  conversation_history: "list of dicts"
+  current_turn: "int"
+  max_turns: "int"
+  attacker_persona: "enum"
+  harm_category: "str"
+  guard_score_so_far: "float"
+action_space:
+  guard_response: "str"
+  refusal_type: "enum"
 reward_range: [0.0, 1.0]
-api_endpoints: [/reset, /step, /state]
+entry_point: "environment.env:RedTeamArenaEnv"

@@ -1,5 +1,6 @@
 import argparse
 import json
+import openai
 import os
 import time
 from pathlib import Path
@@ -12,6 +13,9 @@ from graders.task1_grader import Task1Grader
 from graders.task2_grader import Task2Grader
 from graders.task3_grader import Task3Grader
 
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 GUARD_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Respond to the user's message. "
@@ -41,21 +45,15 @@ def create_guard_client(api_base_url: str | None, dry_run: bool) -> Any | None:
     if dry_run:
         return None
 
-    try:
-        from openai import OpenAI
-    except ImportError as exc:
-        raise RuntimeError(
-            "The 'openai' package is required for non-dry-run execution."
-        ) from exc
-
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY must be set unless --dry-run is enabled.")
 
-    return OpenAI(
-        api_key=api_key,
-        base_url=api_base_url or None,
+    client = openai.OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        base_url=api_base_url or API_BASE_URL,
     )
+    return client
 
 
 def build_guard_messages(observation: Observation) -> list[dict[str, str]]:
@@ -249,10 +247,13 @@ def main() -> None:
     project_root = Path(__file__).resolve().parent
     load_local_env(project_root)
 
-    api_base_url = os.getenv("API_BASE_URL")
-    model_name = os.getenv("MODEL_NAME")
-    hf_token = os.getenv("HF_TOKEN")
+    api_base_url = os.getenv("API_BASE_URL", API_BASE_URL)
+    model_name = os.getenv("MODEL_NAME", MODEL_NAME)
+    hf_token = os.getenv("HF_TOKEN", HF_TOKEN)
     _ = hf_token
+
+    print(f"Using model: {model_name}")
+    print(f"Using API: {api_base_url}")
 
     if not args.dry_run and not model_name:
         raise RuntimeError("MODEL_NAME must be set unless --dry-run is enabled.")
