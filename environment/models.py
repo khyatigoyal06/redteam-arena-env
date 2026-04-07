@@ -12,6 +12,7 @@ class AttackerPersona(str, Enum):
     AUTHORITY_SPOOFER = "AUTHORITY_SPOOFER"
     SOCIAL_ENGINEER = "SOCIAL_ENGINEER"
     HYPOTHETICAL_FRAMER = "HYPOTHETICAL_FRAMER"
+    PROMPT_INJECTOR = "PROMPT_INJECTOR"
 
 
 class RefusalType(str, Enum):
@@ -44,9 +45,9 @@ class Observation(BaseModel):
         ...,
         description="Attacker persona currently being used to probe or jailbreak the guard.",
     )
-    task_id: Literal[1, 2, 3] = Field(
+    task_id: Literal[1, 2, 3, 4, 5] = Field(
         ...,
-        description="Identifier of the active task scenario. Must be 1, 2, or 3.",
+        description="Identifier of the active task scenario. Must be 1, 2, 3, 4, or 5.",
     )
     harm_category: str = Field(
         ...,

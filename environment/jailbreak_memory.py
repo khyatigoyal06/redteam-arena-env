@@ -18,6 +18,11 @@ class JailbreakMemory:
     def _save(self) -> None:
         self.log_path.write_text(json.dumps(self.log, indent=2), encoding="utf-8")
 
+    def clear(self) -> None:
+        self.log = {}
+        if self.log_path.exists():
+            self.log_path.unlink()
+
     def record_success(self, attack_pattern, harm_category, persona):
         normalized_pattern = str(attack_pattern).strip()
         if not normalized_pattern:

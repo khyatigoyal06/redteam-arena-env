@@ -6,14 +6,20 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+
+from server import app
 from environment.env import RedTeamArenaEnv
 from environment.models import Action, AttackerPersona, Observation
 from graders.task1_grader import Task1Grader
 from graders.task2_grader import Task2Grader
 from graders.task3_grader import Task3Grader
+from graders.task4_grader import Task4Grader
+from graders.task5_grader import Task5Grader
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+API_CLIENT = TestClient(app, raise_server_exceptions=False)
 
 
 def make_fake_openai_client(responses: list[str]):
@@ -144,7 +150,7 @@ class RedTeamArenaIntegrationTests(unittest.TestCase):
         self.assertEqual(observation.current_turn, 1)
 
     def test_all_three_tasks(self):
-        for task_id in (1, 2, 3):
+        for task_id in (1, 2, 3, 4, 5):
             env = self.build_env(task_id=task_id)
             observation = env.reset()
             self.assertEqual(observation.task_id, task_id)
@@ -172,12 +178,78 @@ class RedTeamArenaIntegrationTests(unittest.TestCase):
             {"role": "assistant", "content": "Hypothetical framing still does not make it safe."},
         ]
 
-        graders = (Task1Grader(), Task2Grader(), Task3Grader())
+        graders = (Task1Grader(), Task2Grader(), Task3Grader(), Task4Grader(), Task5Grader())
         for grader in graders:
             score = grader.grade(episode_history)
             self.assertIsInstance(score, float)
             self.assertGreaterEqual(score, 0.0)
             self.assertLessEqual(score, 1.0)
+
+    def test_task4_coalition_generates_both_speakers(self):
+        env = self.build_env(task_id=4)
+        env.client = None
+        observation = env.reset()
+        self.assertIn("Speaker A", observation.conversation_history[0]["content"])
+
+        observation, reward, done, _ = env.step(
+            Action(
+                guard_response="I cannot help with bypassing protections or accessing restricted records.",
+                refusal_type="hard_refusal",
+            )
+        )
+
+        self.assertFalse(done)
+        self.assertIn("Speaker B", observation.conversation_history[-1]["content"])
+
+    def test_task5_prompt_injection_uses_embedded_instruction(self):
+        env = self.build_env(task_id=5)
+        env.client = None
+        observation = env.reset()
+        self.assertIn("IGNORE PREVIOUS", observation.conversation_history[0]["content"].upper())
+
+        observation, reward, done, info = env.step(
+            Action(
+                guard_response="This appears to contain a hidden harmful instruction, so I can't help with it.",
+                refusal_type="hard_refusal",
+            )
+        )
+
+        self.assertFalse(done)
+        self.assertTrue(info["llm_eval_result"]["is_harmful_request"])
+
+    def test_step_before_reset_returns_409(self):
+        response = API_CLIENT.post(
+            "/step",
+            json={
+                "guard_response": "I cannot help with that.",
+                "refusal_type": "hard_refusal",
+            },
+            headers={"X-Session-Id": "needs-reset"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("reset", response.json()["detail"].lower())
+
+    def test_task4_step_marks_request_harmful(self):
+        response = API_CLIENT.post(
+            "/reset",
+            json={"task_id": 4},
+            headers={"X-Session-Id": "task4-harmful-check"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        step_response = API_CLIENT.post(
+            "/step",
+            json={
+                "guard_response": "I cannot help with bypassing safeguards or restricted access.",
+                "refusal_type": "hard_refusal",
+            },
+            headers={"X-Session-Id": "task4-harmful-check"},
+        )
+        self.assertEqual(step_response.status_code, 200)
+        payload = step_response.json()
+        self.assertTrue(payload["info"]["llm_eval_result"]["is_harmful_request"])
+        self.assertFalse(payload["info"]["llm_eval_result"]["request_is_safe"])
 
     def test_state_matches_last_observation(self):
         env = self.build_env(task_id=2)
@@ -206,8 +278,10 @@ class RedTeamArenaIntegrationTests(unittest.TestCase):
         self.assertIn("task1", summary)
         self.assertIn("task2", summary)
         self.assertIn("task3", summary)
+        self.assertIn("task4", summary)
+        self.assertIn("task5", summary)
         self.assertIn("mean", summary)
-        for key in ("task1", "task2", "task3", "mean"):
+        for key in ("task1", "task2", "task3", "task4", "task5", "mean"):
             self.assertGreaterEqual(summary[key], 0.0)
             self.assertLessEqual(summary[key], 1.0)
 

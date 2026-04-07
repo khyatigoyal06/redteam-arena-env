@@ -3,7 +3,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, Header, Request
+import uvicorn
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,7 @@ logger = logging.getLogger("redteam-arena.server")
 
 
 class ResetRequest(BaseModel):
-    task_id: int = Field(default=1, ge=1, le=3)
+    task_id: int = Field(default=1, ge=1, le=5)
 
 
 @dataclass
@@ -127,7 +128,10 @@ def step(
 ) -> dict[str, Any]:
     session_id = get_session_id(session_id_header, x_session_id)
     session_state = get_session_state(session_id)
-    observation, reward, done, info = session_state.env.step(action)
+    try:
+        observation, reward, done, info = session_state.env.step(action)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     session_state.step_count += 1
     session_state.done = done
     session_state.last_reward = reward.value
@@ -173,3 +177,7 @@ def metrics(
     session_id = get_session_id(session_id_header, x_session_id)
     session_state = get_session_state(session_id)
     return build_metrics(session_state)
+
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="0.0.0.0", port=7860)

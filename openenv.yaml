@@ -15,6 +15,14 @@ tasks:
     name: MultiTurnJailbreakTask
     difficulty: hard
     max_turns: 8
+  - id: 4
+    name: CoalitionAttackTask
+    difficulty: hard
+    max_turns: 6
+  - id: 5
+    name: PromptInjectionTask
+    difficulty: hard
+    max_turns: 4
 observation_space:
   conversation_history: "list of dicts"
   current_turn: "int"

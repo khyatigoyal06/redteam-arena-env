@@ -3,12 +3,15 @@ from pathlib import Path
 
 
 def generate_dashboard(results, output_path):
-    """Generate an HTML dashboard with persona, harm-category, and task-3 charts."""
+    """Generate an HTML dashboard with task, persona, harm-category, and detailed task charts."""
 
     persona_breaks = {}
     harm_sums = {}
     harm_counts = {}
-    task3_turn_scores = []
+    task_sums = {}
+    task_counts = {}
+    task_details = {}
+    selected_task_id = None
 
     for item in results:
         persona = item.get("attacker_persona", "unknown")
@@ -22,28 +25,47 @@ def generate_dashboard(results, output_path):
         else:
             persona_breaks.setdefault(persona, 0)
 
+        task_label = f"Task {task_id}"
+        task_sums[task_label] = task_sums.get(task_label, 0.0) + guard_score
+        task_counts[task_label] = task_counts.get(task_label, 0) + 1
+
         harm_sums[harm_category] = harm_sums.get(harm_category, 0.0) + guard_score
         harm_counts[harm_category] = harm_counts.get(harm_category, 0) + 1
 
-        if task_id == 3:
-            task3_turn_scores.extend(float(score) for score in turn_scores)
+        task_details[task_label] = {
+            "task_id": int(task_id),
+            "final_score": round(guard_score, 4),
+            "turn_labels": [f"Turn {index + 1}" for index in range(len(turn_scores))],
+            "turn_values": [round(float(score), 4) for score in turn_scores],
+        }
+        if selected_task_id is None or int(task_id) > selected_task_id:
+            selected_task_id = int(task_id)
 
     harm_avgs = {
         category: (harm_sums[category] / harm_counts[category])
         for category in harm_sums
         if harm_counts[category] > 0
     }
+    task_avgs = {
+        task_label: (task_sums[task_label] / task_counts[task_label])
+        for task_label in task_sums
+        if task_counts[task_label] > 0
+    }
+    overall_mean = round(sum(task_avgs.values()) / len(task_avgs), 4) if task_avgs else None
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     chart_data = {
+        "task_labels": list(task_avgs.keys()),
+        "task_values": [round(value, 4) for value in task_avgs.values()],
+        "task_details": task_details,
+        "selected_task_label": f"Task {selected_task_id}" if selected_task_id is not None else None,
+        "overall_mean": overall_mean,
         "persona_labels": list(persona_breaks.keys()),
         "persona_values": list(persona_breaks.values()),
         "harm_labels": list(harm_avgs.keys()),
         "harm_values": [round(value, 4) for value in harm_avgs.values()],
-        "task3_labels": [f"Turn {index + 1}" for index in range(len(task3_turn_scores))],
-        "task3_values": [round(value, 4) for value in task3_turn_scores],
     }
 
     html = f"""<!doctype html>
@@ -97,6 +119,13 @@ def generate_dashboard(results, output_path):
       gap: 18px;
     }}
 
+    .summary-row {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }}
+
     .card {{
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -111,6 +140,61 @@ def generate_dashboard(results, output_path):
       color: #ffd3d3;
     }}
 
+    .card-note {{
+      margin: -4px 0 12px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }}
+
+    .selector-row {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: -4px 0 12px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }}
+
+    .taskpicker {{
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.92rem;
+    }}
+
+    .summary-metric {{
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin: 0;
+    }}
+
+    .data-snapshot {{
+      margin: 0 0 18px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+    }}
+
+    .data-snapshot h2 {{
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: #ffd3d3;
+    }}
+
+    .data-snapshot pre {{
+      margin: 0;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      font-size: 0.92rem;
+      line-height: 1.45;
+      font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+    }}
+
     canvas {{
       width: 100% !important;
       height: 300px !important;
@@ -120,9 +204,24 @@ def generate_dashboard(results, output_path):
 <body>
   <div class=\"container\">
     <h1>RedTeam Arena Results Dashboard</h1>
-    <p>Persona breaks, harm-category safety averages, and task 3 turn-by-turn scores.</p>
+    <p>All task scores, persona breaks, harm-category safety averages, and a detailed view of any selected task.</p>
+
+    <div class=\"summary-row\">
+      <div class=\"card\">
+        <h2>Overall Mean</h2>
+        <p class=\"summary-metric\" id=\"overallMeanValue\">N/A</p>
+      </div>
+      <div class=\"card\">
+        <h2>Detailed Task</h2>
+        <p class=\"summary-metric\" id=\"detailedTaskValue\">N/A</p>
+      </div>
+    </div>
 
     <div class=\"charts\">
+      <div class=\"card\">
+        <h2>Final Score by Task</h2>
+        <canvas id=\"taskChart\"></canvas>
+      </div>
       <div class=\"card\">
         <h2>Persona Break Counts (Guard Score &lt; 0.5)</h2>
         <canvas id=\"personaChart\"></canvas>
@@ -132,14 +231,27 @@ def generate_dashboard(results, output_path):
         <canvas id=\"harmChart\"></canvas>
       </div>
       <div class=\"card\" style=\"grid-column: 1 / -1;\">
-        <h2>Task 3 Turn-by-Turn Safety Score</h2>
-        <canvas id=\"task3Chart\"></canvas>
+        <h2 id=\"detailTaskTitle\">Task Turn-by-Turn Reward</h2>
+        <div class=\"selector-row\">
+          <label for=\"taskDetailSelect\">Choose task</label>
+          <select id=\"taskDetailSelect\" class=\"taskpicker\"></select>
+        </div>
+        <p class=\"card-note\">Final episode score: <span id=\"detailTaskFinalScore\">N/A</span></p>
+        <canvas id=\"longestTaskChart\"></canvas>
       </div>
+    </div>
+
+    <div class=\"data-snapshot\">
+      <h2>Plotted Data Snapshot</h2>
+      <pre id=\"dataSnapshot\"></pre>
     </div>
   </div>
 
   <script>
     const data = {json.dumps(chart_data)};
+    document.getElementById('dataSnapshot').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('overallMeanValue').textContent =
+      data.overall_mean === null ? 'N/A' : data.overall_mean.toFixed(4);
 
     const commonScales = {{
       x: {{
@@ -174,6 +286,35 @@ def generate_dashboard(results, output_path):
       }}
     }});
 
+    new Chart(document.getElementById('taskChart'), {{
+      type: 'bar',
+      data: {{
+        labels: data.task_labels,
+        datasets: [{{
+          label: 'Final Task Score',
+          data: data.task_values,
+          backgroundColor: 'rgba(255, 110, 110, 0.75)',
+          borderColor: '#ff6e6e',
+          borderWidth: 2
+        }}]
+      }},
+      options: {{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {{
+          legend: {{ labels: {{ color: '#f5f5f7' }} }}
+        }},
+        scales: {{
+          ...commonScales,
+          y: {{
+            ...commonScales.y,
+            min: 0,
+            max: 1
+          }}
+        }}
+      }}
+    }});
+
     new Chart(document.getElementById('harmChart'), {{
       type: 'bar',
       data: {{
@@ -203,13 +344,24 @@ def generate_dashboard(results, output_path):
       }}
     }});
 
-    new Chart(document.getElementById('task3Chart'), {{
+    const detailTaskSelect = document.getElementById('taskDetailSelect');
+    data.task_labels.forEach((label) => {{
+      const option = document.createElement('option');
+      option.value = label;
+      option.textContent = label;
+      if (label === data.selected_task_label) {{
+        option.selected = true;
+      }}
+      detailTaskSelect.appendChild(option);
+    }});
+
+    const detailChart = new Chart(document.getElementById('longestTaskChart'), {{
       type: 'line',
       data: {{
-        labels: data.task3_labels,
+        labels: [],
         datasets: [{{
-          label: 'Safety Score',
-          data: data.task3_values,
+          label: 'Per-Turn Reward',
+          data: [],
           borderColor: '#ff3b3b',
           backgroundColor: 'rgba(255, 59, 59, 0.2)',
           fill: true,
@@ -234,6 +386,24 @@ def generate_dashboard(results, output_path):
         }}
       }}
     }});
+
+    function renderDetailedTask(taskLabel) {{
+      const detail = data.task_details[taskLabel];
+      document.getElementById('detailTaskTitle').textContent =
+        taskLabel + ' Turn-by-Turn Reward';
+      document.getElementById('detailedTaskValue').textContent = taskLabel;
+      document.getElementById('detailTaskFinalScore').textContent =
+        detail ? detail.final_score.toFixed(4) : 'N/A';
+      detailChart.data.labels = detail ? detail.turn_labels : [];
+      detailChart.data.datasets[0].data = detail ? detail.turn_values : [];
+      detailChart.update();
+    }}
+
+    detailTaskSelect.addEventListener('change', (event) => {{
+      renderDetailedTask(event.target.value);
+    }});
+
+    renderDetailedTask(data.selected_task_label || data.task_labels[0]);
   </script>
 </body>
 </html>
