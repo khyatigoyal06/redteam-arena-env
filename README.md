@@ -225,21 +225,21 @@ redteam-arena-env/
 │   ├── personas.py
 │   ├── tasks.py
 │   ├── reward.py
-│   ├── adaptive_difficulty.py   ← NEW
-│   └── jailbreak_memory.py      ← NEW
+│   ├── adaptive_difficulty.py   
+│   └── jailbreak_memory.py     
 ├── graders/
 │   ├── task1_grader.py
 │   ├── task2_grader.py
 │   ├── task3_grader.py
-│   ├── task4_grader.py         ← NEW
-│   └── task5_grader.py         ← NEW
+│   ├── task4_grader.py       
+│   └── task5_grader.py        
 ├── dashboard/
-│   ├── generate_dashboard.py    ← NEW
-│   └── report.html              ← AUTO GENERATED
+│   ├── generate_dashboard.py    
+│   └── report.html              
 ├── inference.py
 ├── server.py
-├── baseline_scores.json         ← AUTO GENERATED
-├── validate.py                  ← NEW
-├── vulnerability_log.json       ← AUTO GENERATED
+├── baseline_scores.json         
+├── validate.py                  
+├── vulnerability_log.json       
 └── Dockerfile
 ```
