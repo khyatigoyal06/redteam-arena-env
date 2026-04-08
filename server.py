@@ -103,6 +103,11 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": "1.0.0"}
 
 
+@app.get("/openenv/health")
+def openenv_health() -> dict[str, str]:
+    return health()
+
+
 @app.get("/")
 def root() -> dict[str, Any]:
     return {
@@ -154,6 +159,15 @@ async def reset(
     return observation.model_dump()
 
 
+@app.post("/openenv/reset")
+async def openenv_reset(
+    request: Request,
+    session_id_header: str | None = Header(default=None, alias="session_id"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> dict[str, Any]:
+    return await reset(request, session_id_header, x_session_id)
+
+
 @app.post("/step")
 def step(
     action: Action,
@@ -177,6 +191,15 @@ def step(
     }
 
 
+@app.post("/openenv/step")
+def openenv_step(
+    action: Action,
+    session_id_header: str | None = Header(default=None, alias="session_id"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> dict[str, Any]:
+    return step(action, session_id_header, x_session_id)
+
+
 @app.get("/state")
 def state(
     session_id_header: str | None = Header(default=None, alias="session_id"),
@@ -185,6 +208,14 @@ def state(
     session_id = get_session_id(session_id_header, x_session_id)
     session_state = get_session_state(session_id)
     return session_state.env.state().model_dump()
+
+
+@app.get("/openenv/state")
+def openenv_state(
+    session_id_header: str | None = Header(default=None, alias="session_id"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+) -> dict[str, Any]:
+    return state(session_id_header, x_session_id)
 
 
 @app.get("/tasks")
