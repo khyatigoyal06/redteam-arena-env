@@ -114,14 +114,38 @@ def root() -> dict[str, Any]:
 
 
 @app.post("/reset")
-def reset(
-    body: ResetRequest,
+async def reset(
+    request: Request,
     session_id_header: str | None = Header(default=None, alias="session_id"),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> dict[str, Any]:
     session_id = get_session_id(session_id_header, x_session_id)
     session_state = get_session_state(session_id)
-    session_state.env = RedTeamArenaEnv(task_id=body.task_id)
+
+    payload: Any = None
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = None
+
+    task_id_raw: Any = None
+    if isinstance(payload, dict):
+        task_id_raw = payload.get("task_id")
+    if task_id_raw is None:
+        task_id_raw = request.query_params.get("task_id")
+
+    if task_id_raw is None:
+        task_id = 1
+    else:
+        try:
+            task_id = int(task_id_raw)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="task_id must be an integer between 1 and 5") from exc
+
+    if task_id not in TASKS:
+        raise HTTPException(status_code=422, detail="task_id must be between 1 and 5")
+
+    session_state.env = RedTeamArenaEnv(task_id=task_id)
     session_state.reset_count += 1
     session_state.step_count = 0
     session_state.done = False
