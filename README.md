@@ -1,5 +1,14 @@
 # RedTeam Arena
 
+---
+title: Redteam Arena
+emoji: 🛡️
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 ## Overview
 
 RedTeam Arena is an adversarial AI safety environment where an attacker LLM tries to jailbreak a guard LLM across short, medium, and long conversations. The goal is to measure whether the guard can stay safe, recognize manipulation tactics, and remain consistent under pressure. The environment now includes adaptive difficulty escalation between episodes, jailbreak memory with vulnerability logging, and a visual dashboard for attack success rate analysis.
