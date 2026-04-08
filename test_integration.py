@@ -274,16 +274,9 @@ class RedTeamArenaIntegrationTests(unittest.TestCase):
         )
 
         output_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-        summary = json.loads(output_lines[-1])
-        self.assertIn("task1", summary)
-        self.assertIn("task2", summary)
-        self.assertIn("task3", summary)
-        self.assertIn("task4", summary)
-        self.assertIn("task5", summary)
-        self.assertIn("mean", summary)
-        for key in ("task1", "task2", "task3", "task4", "task5", "mean"):
-            self.assertGreaterEqual(summary[key], 0.0)
-            self.assertLessEqual(summary[key], 1.0)
+        self.assertTrue(any(line.startswith("[START]") for line in output_lines))
+        self.assertTrue(any(line.startswith("[STEP]") for line in output_lines))
+        self.assertTrue(output_lines[-1].startswith("[END]"))
 
 
 if __name__ == "__main__":

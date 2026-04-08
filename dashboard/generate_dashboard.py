@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-def generate_dashboard(results, output_path):
+def generate_dashboard(results, output_path, announce: bool = False):
     """Generate an HTML dashboard with task, persona, harm-category, and detailed task charts."""
 
     persona_breaks = {}
@@ -410,4 +410,5 @@ def generate_dashboard(results, output_path):
 """
 
     output_path.write_text(html, encoding="utf-8")
-    print(f"Dashboard generated at {output_path}")
+    if announce:
+        print(f"Dashboard generated at {output_path}")

@@ -18,4 +18,9 @@ class AdaptiveDifficultyManager:
         return normalized_persona
 
     def log_escalation(self, from_persona, to_persona, task_id):
-        print(f"Escalating from {from_persona} to {to_persona} on task {task_id}")
+        return {
+            "event": "escalation",
+            "from_persona": from_persona,
+            "to_persona": to_persona,
+            "task_id": task_id,
+        }

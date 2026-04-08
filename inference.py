@@ -21,7 +21,9 @@ from graders.task5_grader import Task5Grader
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-HF_TOKEN = os.getenv("HF_TOKEN", "")
+HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+BENCHMARK_NAME = "redteam-arena"
 
 GUARD_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Respond to the user's message. "
@@ -51,15 +53,41 @@ def create_guard_client(api_base_url: str | None, dry_run: bool) -> Any | None:
     if dry_run:
         return None
 
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY must be set unless --dry-run is enabled.")
+        raise RuntimeError("HF_TOKEN or OPENAI_API_KEY must be set unless --dry-run is enabled.")
 
     client = openai.OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=api_key,
         base_url=api_base_url or API_BASE_URL,
     )
     return client
+
+
+def log_start(task: str, env: str, model: str) -> None:
+    """Emit the required structured start log line."""
+
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
+    """Emit the required structured step log line."""
+
+    error_value = error if error else "null"
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error_value}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
+    """Emit the required structured end log line."""
+
+    rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
 
 
 def build_guard_messages(observation: Observation) -> list[dict[str, str]]:
@@ -225,7 +253,8 @@ def run_task(
 ) -> dict[str, Any]:
     """Run one full task episode and return score plus dashboard metadata."""
 
-    env = RedTeamArenaEnv(task_id=task_id)
+    env = RedTeamArenaEnv(task_id=task_id, model_name=model_name, client=client)
+    env.client = client
     if dry_run:
         attach_dry_run_attacker(env)
 
@@ -254,6 +283,7 @@ def run_task(
 
     done = False
     turn_scores: list[float] = []
+    log_start(task=env.task.name, env=BENCHMARK_NAME, model=model_name or "unknown")
     while not done:
         guard_response = generate_guard_response(
             client=client,
@@ -264,6 +294,13 @@ def run_task(
         action = make_action(guard_response)
         observation, reward, done, _ = env.step(action)
         turn_scores.append(reward.value)
+        log_step(
+            step=len(turn_scores),
+            action=action.refusal_type,
+            reward=reward.value,
+            done=done,
+            error=None,
+        )
 
     task_score = grader.grade(env.conversation_history)
     save_episode_log(
@@ -273,7 +310,12 @@ def run_task(
         task_score=task_score,
         dry_run=dry_run,
     )
-    print(f"Task {task_id} score: {task_score:.4f}")
+    log_end(
+        success=task_score >= env.task.success_threshold,
+        steps=len(turn_scores),
+        score=task_score,
+        rewards=turn_scores,
+    )
     return {
         "attacker_persona": env.current_persona.value.lower() if env.current_persona else "unknown",
         "harm_category": env.episode_harm_category,
@@ -303,14 +345,12 @@ def main() -> None:
     api_base_url = os.getenv("API_BASE_URL", API_BASE_URL)
     model_name = os.getenv("MODEL_NAME", MODEL_NAME)
     hf_token = os.getenv("HF_TOKEN", HF_TOKEN)
+    local_image_name = os.getenv("LOCAL_IMAGE_NAME", LOCAL_IMAGE_NAME)
     _ = hf_token
-
-    print(f"Using model: {model_name}")
-    print(f"Using API: {api_base_url}")
+    _ = local_image_name
 
     if args.reset_memory:
         jailbreak_memory.clear()
-        print("Cleared vulnerability_log.json before this run.")
 
     if not args.dry_run and not model_name:
         raise RuntimeError("MODEL_NAME must be set unless --dry-run is enabled.")
@@ -364,10 +404,8 @@ def main() -> None:
         4,
     )
 
-    generate_dashboard(results, dashboard_output_path)
+    generate_dashboard(results, dashboard_output_path, announce=False)
     save_baseline_scores(project_root, scores)
-    jailbreak_memory.summarize()
-    print(json.dumps(scores))
 
 
 if __name__ == "__main__":

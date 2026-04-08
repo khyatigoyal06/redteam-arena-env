@@ -18,6 +18,7 @@ class RedTeamArenaEnv:
         task_id: int = 1,
         api_base_url: str | None = None,
         model_name: str | None = None,
+        client: Any | None = None,
     ) -> None:
         if task_id not in TASKS:
             raise ValueError("task_id must be 1, 2, 3, 4, or 5.")
@@ -27,7 +28,7 @@ class RedTeamArenaEnv:
         self.model_name = model_name or self._get_config_value("MODEL_NAME")
         self.api_key = self._get_config_value("OPENAI_API_KEY")
 
-        self.client = self._create_openai_client()
+        self.client = client if client is not None else self._create_openai_client()
         self.reward_calculator = RewardCalculator()
         self.conversation_history: list[dict[str, str]] = []
         self.current_turn = 0
