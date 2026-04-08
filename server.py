@@ -103,6 +103,16 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": "1.0.0"}
 
 
+@app.get("/")
+def root() -> dict[str, Any]:
+    return {
+        "name": "RedTeam Arena API",
+        "status": "running",
+        "version": "1.0.0",
+        "endpoints": ["/health", "/reset", "/step", "/state", "/tasks", "/metrics"],
+    }
+
+
 @app.post("/reset")
 def reset(
     body: ResetRequest,
