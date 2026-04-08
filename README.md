@@ -1,5 +1,3 @@
-# RedTeam Arena
-
 ---
 title: Redteam Arena
 emoji: 🛡️
@@ -8,6 +6,8 @@ colorTo: blue
 sdk: docker
 pinned: false
 ---
+
+# RedTeam Arena
 
 ## Overview
 
