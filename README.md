@@ -120,6 +120,22 @@ To start from a clean jailbreak-memory state before running inference, use:
 python inference.py --reset-memory
 ```
 
+### Dashboard
+
+Generate the dashboard with a dry run:
+
+```bash
+python inference.py --dry-run --reset-memory
+open dashboard/report.html
+```
+
+Generate the dashboard with a live model-backed run:
+
+```bash
+python inference.py --reset-memory
+open dashboard/report.html
+```
+
 ### Docker Build
 
 ```bash
