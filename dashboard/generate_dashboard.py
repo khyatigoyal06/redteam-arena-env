@@ -35,6 +35,7 @@ def generate_dashboard(results, output_path, announce: bool = False):
         task_details[task_label] = {
             "task_id": int(task_id),
             "final_score": round(guard_score, 4),
+            "episode_history": item.get("episode_history", []),
             "turn_labels": [f"Turn {index + 1}" for index in range(len(turn_scores))],
             "turn_values": [round(float(score), 4) for score in turn_scores],
         }
@@ -195,6 +196,37 @@ def generate_dashboard(results, output_path, announce: bool = False):
       font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
     }}
 
+    .transcript {{
+      display: grid;
+      gap: 10px;
+    }}
+
+    .transcript-message {{
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }}
+
+    .transcript-role {{
+      display: block;
+      margin-bottom: 6px;
+      color: #ffd3d3;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }}
+
+    .transcript-content {{
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }}
+
     canvas {{
       width: 100% !important;
       height: 300px !important;
@@ -238,6 +270,10 @@ def generate_dashboard(results, output_path, announce: bool = False):
         </div>
         <p class=\"card-note\">Final episode score: <span id=\"detailTaskFinalScore\">N/A</span></p>
         <canvas id=\"longestTaskChart\"></canvas>
+      </div>
+      <div class=\"card\" style=\"grid-column: 1 / -1;\">
+        <h2 id=\"transcriptTitle\">Task Conversation Transcript</h2>
+        <div id=\"taskTranscript\" class=\"transcript\"></div>
       </div>
     </div>
 
@@ -391,12 +427,34 @@ def generate_dashboard(results, output_path, announce: bool = False):
       const detail = data.task_details[taskLabel];
       document.getElementById('detailTaskTitle').textContent =
         taskLabel + ' Turn-by-Turn Reward';
+      document.getElementById('transcriptTitle').textContent =
+        taskLabel + ' Conversation Transcript';
       document.getElementById('detailedTaskValue').textContent = taskLabel;
       document.getElementById('detailTaskFinalScore').textContent =
         detail ? detail.final_score.toFixed(4) : 'N/A';
       detailChart.data.labels = detail ? detail.turn_labels : [];
       detailChart.data.datasets[0].data = detail ? detail.turn_values : [];
       detailChart.update();
+
+      const transcript = document.getElementById('taskTranscript');
+      transcript.innerHTML = '';
+      const history = detail ? detail.episode_history : [];
+      history.forEach((message) => {{
+        const wrapper = document.createElement('div');
+        wrapper.className = 'transcript-message';
+
+        const role = document.createElement('span');
+        role.className = 'transcript-role';
+        role.textContent = message.role || 'unknown';
+
+        const content = document.createElement('p');
+        content.className = 'transcript-content';
+        content.textContent = message.content || '';
+
+        wrapper.appendChild(role);
+        wrapper.appendChild(content);
+        transcript.appendChild(wrapper);
+      }});
     }}
 
     detailTaskSelect.addEventListener('change', (event) => {{
