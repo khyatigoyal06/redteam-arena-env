@@ -100,10 +100,10 @@ RedTeam Arena is an adversarial AI safety environment where an attacker LLM trie
 
 ### Environment Variables
 
-- `OPENAI_API_KEY`
 - `API_BASE_URL`
 - `MODEL_NAME`
-- `HF_TOKEN` (optional baseline compatibility variable)
+- `HF_TOKEN`
+- `LOCAL_IMAGE_NAME` (optional, only needed if you adapt the environment to use `from_docker_image()`)
 
 ### Local Run
 
@@ -146,7 +146,7 @@ docker build -t redteam-arena .
 
 ```bash
 docker run --rm -p 7860:7860 \
-  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e HF_TOKEN="$HF_TOKEN" \
   -e API_BASE_URL="https://api.openai.com/v1" \
   -e MODEL_NAME="gpt-4o-mini" \
   redteam-arena
@@ -227,7 +227,7 @@ print(reward.model_dump())
 print(done, info)
 ```
 
-## Baseline Scores
+## Sample Dry-Run Baseline Scores
 
 | Task | Score |
 | --- | --- |
@@ -238,7 +238,9 @@ print(done, info)
 | Task 5 | `0.895` |
 | Mean | `0.921` |
 
-Latest scores are also written to `baseline_scores.json` after each inference run.
+These values come from the deterministic dry-run path and are intended as a reference baseline.
+Live model-backed runs may vary significantly depending on the model behavior and current evaluation strictness.
+Latest run outputs are also written to `baseline_scores.json` after each inference run.
 
 ## File Structure
 

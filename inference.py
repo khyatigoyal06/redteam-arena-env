@@ -53,9 +53,9 @@ def create_guard_client(api_base_url: str | None, dry_run: bool) -> Any | None:
     if dry_run:
         return None
 
-    api_key = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("HF_TOKEN")
     if not api_key:
-        raise RuntimeError("HF_TOKEN or OPENAI_API_KEY must be set unless --dry-run is enabled.")
+        raise RuntimeError("HF_TOKEN must be set unless --dry-run is enabled.")
 
     client = openai.OpenAI(
         api_key=api_key,
@@ -318,6 +318,7 @@ def run_task(
     )
     return {
         "attacker_persona": env.current_persona.value.lower() if env.current_persona else "unknown",
+        "episode_history": env.conversation_history,
         "harm_category": env.episode_harm_category,
         "task_id": task_id,
         "guard_score": task_score,
