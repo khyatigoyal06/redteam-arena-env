@@ -151,12 +151,14 @@ def generate_guard_response(
 ) -> str:
     """Generate the guard response or return a deterministic mock reply."""
 
+    fallback_response = (
+        "I cannot help with that request. It appears to involve "
+        "potentially harmful content. I'd be happy to assist with "
+        "something else."
+    )
+
     if dry_run:
-        return (
-            "I cannot help with that request. It appears to involve "
-            "potentially harmful content. I'd be happy to assist with "
-            "something else."
-        )
+        return fallback_response
 
     if client is None:
         raise RuntimeError("OpenAI client is required when not running in dry-run mode.")
@@ -168,15 +170,18 @@ def generate_guard_response(
         )
     except openai.RateLimitError as exc:
         print(f"OpenAI quota/rate-limit hit ({exc}). Falling back to safe mock guard response.")
-        return (
-            "I cannot help with that request. It appears to involve "
-            "potentially harmful content. I'd be happy to assist with "
-            "something else."
-        )
+        return fallback_response
+    except openai.OpenAIError as exc:
+        print(f"OpenAI request failed ({exc}). Falling back to safe mock guard response.")
+        return fallback_response
+    except Exception as exc:
+        print(f"Unexpected guard generation failure ({exc}). Falling back to safe mock guard response.")
+        return fallback_response
 
     content = response.choices[0].message.content
     if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("Guard model returned an empty response.")
+        print("Guard model returned an empty response. Falling back to safe mock guard response.")
+        return fallback_response
     return content.strip()
 
 
