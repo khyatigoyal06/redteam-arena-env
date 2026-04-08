@@ -14,13 +14,17 @@ authors = [
 ]
 dependencies = [
   "fastapi>=0.115.0",
+  "openenv-core>=0.2.0",
   "openai>=1.0.0",
   "pydantic>=2.0.0",
   "uvicorn>=0.30.0"
 ]
 
+[project.scripts]
+server = "server.app:main"
+
 [tool.setuptools]
-py-modules = ["inference", "server", "validate", "test_integration"]
+py-modules = ["inference", "validate", "test_integration"]
 
 [tool.setuptools.packages.find]
-include = ["environment*", "graders*"]
+include = ["environment*", "graders*", "server*"]
