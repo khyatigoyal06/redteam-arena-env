@@ -83,9 +83,9 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str | Non
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     """Emit the required structured end log line."""
 
-    rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    rewards_str = ",".join(f"{reward:.4f}" for reward in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} score={score:.4f} rewards={rewards_str}",
         flush=True,
     )
 
